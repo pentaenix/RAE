@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .gf import GfBone, GfMaterial, GfMesh, GfModel, GfTexture, GfTextureUnit
+from .pokemon_effects import effect_pass,surface_effect,portable_colors,effect_motion
 from .gltf.apply import apply_glb_policy
 from .gltf.texture_alpha import (
     png_has_meaningful_transparency,
@@ -906,12 +907,13 @@ def write_model_glb(
     ) -> None:
         if len(sub.colors) != count:
             return
-        uses_alpha = mat is None or _material_uses_vertex_alpha(mat)
+        uses_alpha = mat is None or surface_effect(mat) or _material_uses_vertex_alpha(mat)
         color_type = "VEC4" if uses_alpha else "VEC3"
+        colors=portable_colors(mat,sub.colors)
         color_data = (
-            b"".join(struct.pack("<4f", *color) for color in sub.colors)
+            b"".join(struct.pack("<4f", *color) for color in colors)
             if uses_alpha
-            else b"".join(struct.pack("<3f", *color[:3]) for color in sub.colors)
+            else b"".join(struct.pack("<3f", *color[:3]) for color in colors)
         )
         color_view = add_view(
             color_data,
@@ -1089,7 +1091,7 @@ def write_model_glb(
                 (name for name in mat.texture_names if name in tex_objects),
                 None,
             )
-            world_tev = bool(
+            world_tev = surface_effect(mat) or bool(
                 not pica_render_state_authoritative
                 and material_source is model
                 and not material_name_suffix
@@ -1119,6 +1121,7 @@ def write_model_glb(
             if resolved is not None:
                 albedo_rgba = resolved[0]
             additive = _uses_additive_blend(mat, albedo_rgba, source_rgba=source_rgba)
+            if surface_effect(mat):additive=False
             unit = None
             if albedo is not None:
                 unit = next((u for u in mat.texture_units if u.name == albedo), None)
@@ -1188,6 +1191,10 @@ def write_model_glb(
                 ),
             )
             environment_role = _world_environment_material_role(mat.name)
+            if effect_pass(mat):
+                entry.setdefault('extras',{}).setdefault('rae',{})['pokemonEffectPass']=effect_pass(mat)
+                if mat.portable_effect_recipe:
+                    entry['extras']['rae']['standaloneEffectRecipe']=mat.portable_effect_recipe
             if environment_role:
                 entry.setdefault("extras", {}).setdefault("rae", {})[
                     "environmentMaterial"
@@ -1212,7 +1219,7 @@ def write_model_glb(
                         )
                 pica_tev = {
                     "textureIndices": texture_indices,
-                    "stages": list(mat.tev_stages),
+                    "stages": [dict(stage) for stage in mat.tev_stages],
                     "bufferColor": [channel / 255.0 for channel in mat.tev_buffer_color],
                     "constantAssignments": list(mat.constant_assignments),
                     "constantColors": [
@@ -1273,6 +1280,11 @@ def write_model_glb(
                     # their source PNGs had opaque storage alpha.
                     entry["alphaMode"] = "BLEND"
                 entry.setdefault("extras", {}).setdefault("rae", {})["picaTev"] = pica_tev
+                if effect_pass(mat)=='flame_or_smoke':
+                    # Standalone surfaces use authored volume coverage and the
+                    # original stencil palette, outside the game's framebuffer pass.
+                    entry['alphaMode']='BLEND'
+                    entry['extras']['rae']['pica']['authoritative']=False
             if "sea_iro047" in mat.name.casefold():
                 base_texture = entry.get("pbrMetallicRoughness", {}).get(
                     "baseColorTexture", {}
@@ -2019,6 +2031,9 @@ def write_model_glb(
         gltf.setdefault("extras", {}).setdefault("rae", {})[
             "mapMaterialMotion"
         ] = world_map_motion
+    effects={m.name for m in model.materials if surface_effect(m)}
+    if effects and animations:
+        gltf.setdefault('extras',{}).setdefault('rae',{})['pokemonMaterialMotion']=effect_motion(animations,model,effects)
     if environment_scene is not None:
         scene_metadata = dict(environment_scene)
         scene_metadata["states"] = build_world_environment_states(world_map_motion)

@@ -95,6 +95,48 @@ the export records the contributing source names in `meshVisibilitySources`.
 
 Community mappings live in `mappings/3ds/`.
 
+## Pokemon surface effects
+
+`pokemon_effects.py` reads the model package's original PS shader bank. Visible
+surface effects retain their six TEV stages, three texture coordinates/samplers
+and looping UV tracks under `extras.rae.pokemonMaterialMotion`, independently of
+world environment motion. Packed PDC/PTS specular masks do not tint body albedo
+when the original shader does not consume their primary RGB.
+
+Fire and gas originally use offscreen volume, distortion and framebuffer
+composition passes. Standalone exports use authored Core meshes and scrolling
+heat/coverage textures, with the stencil's edge/core colors and smoke opacity. The larger Sten
+compositor and unused distortion passes remain in the asset but are tagged
+`pokemonEffectPass: intermediate` for consumers to suppress. This adaptation
+preserves source geometry and skeletal clips; it does not reproduce the game's
+framebuffer distortion. Beto wet overlays retain their original multiplicative
+blend. `pokemon_effect_export.py` re-exports a selected species list and records
+the exact source GLB hashes for consumer validation.
+
+## ORAS Cosplay Pikachu (offline export)
+
+`oras_pokemon.py` reads ORAS `/a/0/0/8` and its exact Pikachu table row. It exports
+only forms 02–07, preserving ordinary male/female models in the consuming app.
+The BCH/GF1 bridge uses the same pinned local SPICA checkout as the CGFX tool,
+without invoking a renderer or changing the GFModel/Ultra Moon pipeline.
+
+```sh
+.venv/bin/python -m rae.platforms.threeds.oras_pokemon \
+  'roms/Pokemon Omega Ruby (USA) (En,Ja,Fr,De,Es,It,Ko) (Rev 2).cci' \
+  exports/attend_completion/oras
+```
+
+Each form keeps all eight source slots, original normal/rare texture banks and
+36 sampled GF1 skeletal clips at 30 fps. The uncostumed Cosplay model reuses the
+female base Pikachu motion banks; those shared packages are retained too. BCH
+palette aliases are consolidated before GLB emission without changing weighted
+deformation. Original PICA render state is retained so opaque face sheets do not
+become cutouts merely because their PNG storage contains alpha. Material-motion
+and shader packages remain raw. The optional `--forms`
+subset preserves the other entries in the output manifest and rejects modified
+source GLBs instead of overwriting them. Derived application-specific locomotion
+retargeting and custom mesh edits belong to the consumer's asset tools.
+
 ## Generic named-RomFS games
 
 Unknown decrypted 3DS games are no longer sent through Ultra Moon's anonymous
@@ -113,3 +155,21 @@ This fallback immediately benefits games that keep NintendoWare assets as
 named RomFS files. Games that hide them inside proprietary archives still need
 a small game profile/archive reader, but do not require changes to the verified
 Ultra Moon scanner.
+
+## Ultra Moon Passport stamps (offline export)
+
+`passport_stamps.py` reads `/a/2/5/1` through the local GARC reader, then
+`alyt.py` reads the embedded SARC and original named BFLIM files. Native
+128×128 ETC1A4 stamp colors and alpha are preserved. The Passport layout's
+inverted texture Y is corrected without resampling. Existing sprite previews
+and other game profiles are unchanged.
+
+```sh
+.venv/bin/python scripts/export_usum_passport_stamps.py \
+  'roms/Pokemon Ultra Moon.cci' --out exports/usum-passport-stamps
+```
+
+Output includes four named island trial stamps, Island Challenge completion,
+all 16 original `Mark_*` PNGs, three stamp/effect textures, original BFLIM/ALYT
+bytes and a SHA-256 source manifest. This archive profile is verified on Ultra
+Moon; it is not applied automatically to unrelated 3DS games.

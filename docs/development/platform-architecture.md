@@ -102,3 +102,13 @@ Run the marker for the platform being changed, followed by the boundary tests:
 
 The boundary tests and the rules in `.cursor/rules/` enforce the same module
 ownership described here.
+
+
+The 3DS island also exposes device-free audio preparation APIs in
+`platforms/threeds/audio_module/csar.py` and `cwav.py`. `SoundArchive.bank_waves`
+follows CSAR bank/file/string tables and CBNK wave references into CWAR/CWAV
+payloads; it does not guess wave names from physical file order. CWAV metadata
+and PCM8/PCM16/DSP ADPCM decode remain platform-local and bounded. These helpers
+do not enable a shared audio preview route or add a CSEQ synthesizer. Small
+synthetic fixtures in `test_threeds_csar.py` / `test_threeds_cwav.py` protect
+reference offsets, signed samples, loop metadata, saturation and invalid bounds.

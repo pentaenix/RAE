@@ -16,7 +16,7 @@ class SwitchExportModule:
         ]
 
     def export_options_for(self, asset: Asset) -> list[tuple[str, str, str]]:
-        if asset.magic in {"SWRM", "SWLK"}:
+        if asset.magic in {"SWRM", "SWLK", "SNAP"}:
             return []
         if asset.magic == "TRMD":
             return [

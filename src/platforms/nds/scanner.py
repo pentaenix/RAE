@@ -367,7 +367,7 @@ def scan_blob(
                         depth=depth + 1,
                         max_depth=max_depth,
                         carve_unknown_blobs=False,
-                        expand_audio_archives=False,
+                        expand_audio_archives=True,
                         decompressors=decompressors,
                         expected_magics=expected_magics,
                         budget=budget,

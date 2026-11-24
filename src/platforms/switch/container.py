@@ -127,6 +127,7 @@ class NcaSection:
     ctr_prefix: bytes  # 8-byte generation prefix for CTR counter
     key: bytes
     romfs_data_offset: int = 0  # IVFC level-6 (data) offset within the section
+    patch_info: bytes = b""
 
 
 class SwitchNca:
@@ -154,6 +155,7 @@ class SwitchNca:
                 "NCA header did not decrypt (bad/incomplete prod.keys header_key)."
             )
         self.content_type = header[0x205]
+        self.title_id = struct.unpack_from("<Q", header, 0x210)[0]
         key_generation = max(header[0x206], header[0x220])
         key_index = header[0x207]
         rights_id = header[0x230:0x240]
@@ -192,6 +194,7 @@ class SwitchNca:
                     ctr_prefix=ctr_prefix,
                     key=body_key,
                     romfs_data_offset=romfs_data_offset,
+                    patch_info=fs_header[0x100:0x140],
                 )
             )
 
@@ -316,10 +319,12 @@ def parse_romfs(nca: SwitchNca, section: NcaSection) -> list[RomFsFile]:
 class SwitchRom:
     """Opens an NSP/XCI, exposes the Program NCA's RomFS files."""
 
-    def __init__(self, path: str | Path, keys: SwitchKeys | None = None):
+    def __init__(self, path: str | Path, keys: SwitchKeys | None = None, *, allow_patch: bool = False):
         self.path = Path(path).expanduser().resolve()
         self._fh = self.path.open("rb")
         self.keys = keys or SwitchKeys.load(self.path)
+        self._allow_patch = allow_patch
+        self._entries = None
         self._program_nca: SwitchNca | None = None
         self._romfs_section: NcaSection | None = None
         self._romfs_files: list[RomFsFile] | None = None
@@ -355,7 +360,11 @@ class SwitchRom:
     def _load_program(self) -> None:
         if self._program_nca is not None:
             return
-        entries = [e for e in self._partition_entries() if e.name.endswith(".nca")]
+        from .tickets import load_common_tickets
+        if self._entries is None:
+            self._entries = self._partition_entries()
+            self.keys = load_common_tickets(self._fh, self._entries, self.keys)
+        entries = [e for e in self._entries if e.name.endswith(".nca")]
         # The Program NCA (content_type 0) is the large one; check biggest first.
         for entry in sorted(entries, key=lambda e: -e.size):
             try:
@@ -365,7 +374,8 @@ class SwitchRom:
             if nca.content_type != 0:  # 0 = Program
                 continue
             romfs = next(
-                (s for s in nca.sections if s.fs_type == _SECTION_ROMFS and s.crypto_type in (0, 1, 3)),
+                (s for s in nca.sections if s.fs_type == _SECTION_ROMFS
+                 and s.crypto_type in ((0, 1, 3, 4) if self._allow_patch else (0, 1, 3))),
                 None,
             )
             if romfs is None:

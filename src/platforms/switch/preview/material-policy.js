@@ -1,6 +1,7 @@
 /** Honor extras.rae.renderClass, glTF alpha modes, and texture alpha in the WebEngine viewer. */
 import * as THREE from 'three';
 import { textureMapHasCutoutAlpha, textureMapHasPartialAlpha } from './texture-alpha.js';
+export { registerGlbLoaderPlugins } from './snap-layers.js';
 
 export function renderClassForMaterial(mat, gltfMat) {
   const extras = mat?.userData?.gltfExtensions?.extras || gltfMat?.extras || mat?.extras || {};
@@ -47,6 +48,10 @@ function resolvePreviewBlendMode(mat) {
   const alphaMode = String(pol.alphaMode || src.alphaMode || 'OPAQUE').toUpperCase();
   const alphaCutoff = Number(pol.alphaCutoff ?? src.alphaCutoff ?? 0.5);
   const nitroAlpha = nitroAlphaFromSources(mat, src, pol);
+  if (src.extras?.rae?.snapSurface) {
+    const mode = { MASK: 'cutout', BLEND: 'blend' }[alphaMode] || 'opaque';
+    return { mode, alphaCutoff, nitroAlpha };
+  }
   const hasCutout = textureMapHasCutoutAlpha(mat.map);
   const hasPartial = textureMapHasPartialAlpha(mat.map);
   const shadowDecal = renderClass === 'uniform_decal';
@@ -114,7 +119,7 @@ function applyPreviewBlendMode(mat, blend) {
       mat.transparent = true;
       mat.depthWrite = false;
       mat.alphaTest = 0;
-      mat.opacity = 1;
+      mat.opacity = src.extras?.rae?.snapSurface === 'water' ? nitroAlpha : 1;
       break;
     default:
       break;
@@ -125,6 +130,14 @@ function applyPreviewBlendMode(mat, blend) {
 
 export function applyMaterialPolicy(mat) {
   if (!mat) return;
+
+  const snapSurface = mat.userData.gltfMaterial?.extras?.rae?.snapSurface;
+  if (snapSurface) {
+    // Preserve the glTF samplers. The far backdrop already carries a water gradient.
+    mat.fog = snapSurface !== 'backdrop';
+    applyPreviewBlendMode(mat, resolvePreviewBlendMode(mat));
+    return;
+  }
 
   if (mat.map) {
     mat.map.wrapS = THREE.RepeatWrapping;

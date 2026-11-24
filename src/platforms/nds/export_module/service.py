@@ -80,6 +80,8 @@ def export_options_for(asset: Asset) -> list[tuple[str, str, str]]:
             ("related_png", "Combined PNG using related tiles/palettes/cells", "Pair same-folder NCGR/NCLR/NSCR/NCER/NANR assets and compose the best preview RAE can."),
         ])
     elif asset.magic in {"SDAT", "SSEQ", "SSAR", "SBNK", "SWAR", "SWAV", "STRM"}:
+        if asset.magic == "SDAT":
+            options.append(("audio_browse", "Browse Nintendo DS sounds", "Find, play and export individual sounds with their original instruments."))
         options.extend([
             ("audio_bundle", "Audio bundle: raw + WAV previews", "Best-quality practical output: raw original pieces plus lossless WAV previews where RAE can decode samples/streams."),
             ("audio_bundle_mp3", "Audio bundle + optional MP3", "Also writes high-quality MP3 copies when ffmpeg is installed. WAV remains the quality-first output."),
@@ -227,15 +229,22 @@ def run_export_choice(host: ExportHost, asset: Asset, choice: str, out: Path) ->
         return export_model_obj(host, asset, out)
     if choice == "model_bundle":
         return export_model_bundle(host, asset, out)
+    if choice == "audio_browse":
+        from ..audio_module.browser import SoundArchiveDialog
+
+        dialog = SoundArchiveDialog(host, asset.data, out)
+        dialog.exec()
+        return dialog.written
     if choice in {"audio_bundle", "audio_bundle_mp3", "audio_open"}:
-        from ....ui.main.audio import export_audio_bundle
+        from ..audio import export_audio_bundle
 
         base = out if choice != "audio_open" else (host.preview_temp / "audio_previews")
         written = export_audio_bundle(asset, base, make_mp3=(choice == "audio_bundle_mp3"))
         if choice == "audio_open":
             wavs = [p for p in written if p.suffix.lower() == ".wav"]
-            if wavs:
-                open_path(host, wavs[0])
+            if not wavs:
+                raise RuntimeError("No WAV could be decoded. For sequences, browse the source SDAT to render with the original sound bank.")
+            open_path(host, wavs[0])
         return written
     return export_readable_asset(asset, out)
 

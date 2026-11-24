@@ -17,6 +17,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+switch = [
+    "texture2ddecoder>=1.0.4",
+    "lz4>=4.4.4",
+    "pycryptodome>=3.23.0",
+]
 preview = [
     "PySide6-Addons>=6.6",
 ]

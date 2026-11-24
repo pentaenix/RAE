@@ -30,7 +30,27 @@ def _cache_path(rom_path: str | Path) -> Path:
     return Path(rom_path).expanduser().resolve().parent / _HASH_CACHE_NAME
 
 
-def open_archive(rom_path: str | Path, progress: Progress | None = None) -> TrinityArchive:
+def open_archive(rom_path: str | Path, progress: Progress | None = None, *,
+                 update_path: str | Path | None = None) -> TrinityArchive:
+    if update_path is not None:
+        from .patch_romfs import PatchedSwitchRom
+        rom = PatchedSwitchRom(rom_path, update_path)
+        try:
+            files = {f.path: f for f in rom.romfs_files()}
+            trpfd = rom.read_file(files[_TRPFD_PATH])
+            entry = files[_TRPFS_PATH]
+            head = rom.read_file(entry, 0, 16)
+            init = struct.unpack_from("<Q", head, 8)[0]
+            index = TrpfsIndex.parse_header(head, rom.read_file(entry, init, min(12_000_000, entry.size - init)))
+            archive = TrinityArchive(trpfd, index, read_trpfs_range=lambda o, s: rom.read_file(entry, o, s))
+            archive.source_update = Path(update_path).name
+            # Keep the read-only overlay handles alive for the archive lifetime.
+            import weakref
+            weakref.finalize(archive, rom.close)
+            return archive
+        except Exception:
+            rom.close()
+            raise
     keys = SwitchKeys.load(rom_path)
     with SwitchRom(rom_path, keys) as rom:
         files = {f.path: f for f in rom.romfs_files()}

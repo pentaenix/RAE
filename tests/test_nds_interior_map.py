@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from types import SimpleNamespace
 
 import pytest
@@ -14,6 +15,10 @@ from src.platforms.nds.export_module.interior_map import (
     is_gen5_interior_candidate,
 )
 from src.platforms.nds.gltf.glb_io import read_glb
+from src.platforms.nds.export_module.interior_tile_kit import (
+    discover_interior_tile_cells,
+    export_gen5_interior_tile_kit,
+)
 
 
 @pytest.mark.nds
@@ -103,6 +108,52 @@ def test_interior_package_contains_grid_masks_and_embedded_metadata(tmp_path) ->
     assert wall_centers_z and max(float(value) for value in wall_centers_z) < 32.0
     assert black_cap_normals
     assert all(float(normal[1]) >= 0.7 for normal in black_cap_normals)
+
+
+@pytest.mark.nds
+def test_interior_tile_kit_clips_floor_and_walls_into_portable_cells(tmp_path) -> None:
+    scene = trimesh.Scene()
+    scene.add_geometry(_box("fhyuka_1", (32, 1, 32), (16, -0.5, 16)), geom_name="floor")
+    scene.add_geometry(_box("fhkabe_1", (32, 16, 1), (16, 8, 0.5)), geom_name="wall")
+    source = tmp_path / "interior.glb"
+    source.write_bytes(scene.export(file_type="glb"))
+    metadata = build_gen5_interior_metadata(
+        source,
+        map_file_index=842,
+        area_index=284,
+        virtual_path="a/0/0/8/file_0842.bin#carved_0x14.nsbmd",
+        rom_name="Pokemon Black 2",
+    )
+
+    discovered = discover_interior_tile_cells(
+        source, metadata, classify_material=classify_interior_material)
+    assert {(cell.role, cell.x, cell.y) for cell in discovered} >= {
+        ("floor", 0, 0), ("floor", 1, 0), ("wall", 0, 0), ("wall", 1, 0),
+    }
+
+    manifest_path, bundles = export_gen5_interior_tile_kit(
+        source,
+        metadata,
+        tmp_path / "tile-kit",
+        classify_material=classify_interior_material,
+    )
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["format"] == "rae.gen5InteriorTileKit"
+    assert manifest["componentPolicy"] == "grid-cell"
+    assert len(bundles) == len(manifest["tiles"])
+    assert {tile["role"] for tile in manifest["tiles"]} == {"floor", "wall"}
+    assert {tab["id"] for tab in manifest["suggestedTabs"]} == {
+        "interior_floors", "interior_walls"}
+    assert {tile["suggestedTab"]["id"] for tile in manifest["tiles"]} == {
+        "interior_floors", "interior_walls"}
+    wall_bundle = bundles[next(index for index, tile in enumerate(manifest["tiles"]) if tile["role"] == "wall")]
+    with zipfile.ZipFile(wall_bundle) as archive:
+        tile_manifest = json.loads(archive.read("manifest.json"))
+    assert "interior.wall" in tile_manifest["defaults"]["tags"]
+    assert tile_manifest["defaults"]["collision"] == {
+        "mode": "footprint", "autoApply": True, "clearOnErase": True,
+    }
+    assert (manifest_path.parent / "interior-tile-kit.zip").is_file()
 
 
 @pytest.mark.nds

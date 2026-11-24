@@ -90,6 +90,32 @@ def cmd_mappings() -> int:
 
 def cmd_audio(assets: list[Asset], args) -> int:
     out = Path(args.out)
+    if args.sound:
+        from ..audio import export_sounds, sdat_sound_symbols
+        from ..util import sanitize_component
+
+        terms = [term.casefold() for term in args.sound]
+        matches = 0
+        try:
+            for asset in assets:
+                if asset.magic != "SDAT":
+                    continue
+                sounds = [s for s in sdat_sound_symbols(asset.data)
+                          if any(term in s["name"].casefold() for term in terms)]
+                if args.limit > 0:
+                    sounds = sounds[:max(0, args.limit - matches)]
+                if sounds:
+                    folder = out / f"{sanitize_component(Path(asset.virtual_path).stem)}_{asset.asset_id}"
+                    for path in export_sounds(asset.data, sounds, folder):
+                        print(path)
+                    matches += len(sounds)
+        except (OSError, ValueError, RuntimeError) as exc:
+            print(f"Audio export failed: {exc}", file=sys.stderr)
+            return 1
+        if not matches:
+            print("No matching SDAT sound symbols found.", file=sys.stderr)
+            return 1
+        return 0
     selected = [a for a in assets if a.magic in {"SDAT", "SSEQ", "SSAR", "SBNK", "SWAR", "SWAV", "STRM"}]
     if args.limit > 0:
         selected = selected[: args.limit]

@@ -145,6 +145,10 @@ def classify_material(
     declared_mode = _declared_alpha_mode(material)
     nitro_tex_alpha = _nitro_texture_alpha_kind(material)
 
+    rae=material.get('extras',{}).get('rae',{})
+    if rae.get('pokemonEffectPass')=='flame_or_smoke' and rae.get('picaTev'):
+        return ClassificationResult(render_class=RenderClass.BLEND,texture_meaningful_alpha=meaningful_alpha,
+                                    horizontal_face_fraction=horizontal_fraction,nitro_alpha=nitro_alpha)
     pica_render_class = _pica_render_class(material)
     if pica_render_class is not None:
         return ClassificationResult(

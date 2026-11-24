@@ -176,6 +176,8 @@ def scan_switch_rom_path(
 
     # Imported lazily so a missing pycryptodome doesn't break platform import.
     from .container import SwitchContainerError, SwitchRom
+    from .snap_drp import DRPF_MAGIC
+    from .snap_courses import SNAP_COURSE_MAGIC, SNAP_COURSES
 
     assets: list[Asset] = []
     try:
@@ -201,6 +203,7 @@ def scan_switch_rom_path(
             )
 
             counts: dict[str, int] = {}
+            has_snap_preview = False
             for entry in files:
                 kind, magic, ext = _classify(entry.path)
                 is_icon = any(hint in entry.path.lower() for hint in _ICON_HINTS)
@@ -223,7 +226,19 @@ def scan_switch_rom_path(
                     )
                 )
                 counts[magic] = counts.get(magic, 0) + 1
-            assets.extend(_scan_trinity_assets(source, report))
+                course = SNAP_COURSES.get(entry.path)
+                if course is not None and rom.read_file(entry, 0, 4) == DRPF_MAGIC.to_bytes(4, "little"):
+                    has_snap_preview = True
+                    assets.append(_descriptor_asset(
+                        asset_id=course.asset_id,
+                        virtual_path=f"switch/{source.stem}{entry.path.removesuffix('.drp')} - {course.label}.json",
+                        kind="Switch course preview",
+                        magic=SNAP_COURSE_MAGIC,
+                        payload={"type": "snap_course_preview", "rom": str(source), "romfs_path": entry.path},
+                        mapping_label=course.label,
+                    ))
+            if not has_snap_preview:
+                assets.extend(_scan_trinity_assets(source, report))
             report(f"Switch: scan complete — {len(assets)} rows {counts}")
     except SwitchContainerError as exc:
         return [_locked_row(source, f"{source.name}: {exc}")]

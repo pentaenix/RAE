@@ -1999,8 +1999,8 @@ class NdsMapObjectsWidget(QWidget):
                 self._export_interior_package,
             ),
             "interior_kit": (
-                "Interior kit pieces",
-                "Export reusable floor, wall, entrance, stair, window, and shadow material groups with a manifest.",
+                "Interior tile kit",
+                "Clip floor, wall, entrance, stair, window, and shadow geometry into portable Resort .tile bundles.",
                 self._export_interior_kit,
             ),
             "building_doorless": (
@@ -2117,10 +2117,14 @@ class NdsMapObjectsWidget(QWidget):
         rom_path = getattr(self._window, "rom_path", None)
         if composition is None or asset is None:
             return
-        output_dir = self._choose_interior_output("Export reusable interior kit")
+        output_dir = self._choose_interior_output("Export interior tile kit")
         if output_dir is None:
             return
-        from .export_module.interior_map import export_gen5_interior_kit, export_gen5_interior_package
+        from .export_module.interior_map import (
+            classify_interior_material,
+            export_gen5_interior_package,
+        )
+        from .export_module.interior_tile_kit import export_gen5_interior_tile_kit
 
         shell_path, metadata_path = export_gen5_interior_package(
             composition,
@@ -2129,12 +2133,17 @@ class NdsMapObjectsWidget(QWidget):
             virtual_path=asset.virtual_path,
         )
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        manifest_path, parts = export_gen5_interior_kit(shell_path, metadata, output_dir / "kit")
-        self._status(f"Exported {len(parts)} reusable interior part(s): {manifest_path}")
+        manifest_path, tiles = export_gen5_interior_tile_kit(
+            shell_path,
+            metadata,
+            output_dir / "tile-kit",
+            classify_material=classify_interior_material,
+        )
+        self._status(f"Exported {len(tiles)} reusable interior tile(s): {manifest_path}")
         QMessageBox.information(
             self,
-            "Interior kit exported",
-            f"Created {len(parts)} reusable GLB part(s) and:\n{manifest_path}",
+            "Interior tile kit exported",
+            f"Created {len(tiles)} reusable .tile bundle(s) and:\n{manifest_path}",
         )
 
     def _export_all_variants(self) -> None:

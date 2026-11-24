@@ -17,6 +17,7 @@ from ..gltf.preview_textures import (
 from ..gltf.texture_patch import write_patched_preview_glb
 from ....preview_policy import ModelPreviewPolicy, ModelPreviewQuality, model_preview_policy
 from ..asset_resolver import MODEL_ANIMATION_MAGICS, folder_sibling_assets
+from ..cutscene_bundle import named_animation_siblings
 from ..exporter import convert_with_apicula, texture_outputs
 from ..model_texture_resolver import (
     ModelTextureResolution,
@@ -103,12 +104,15 @@ def _conversion_siblings(
     for item in resolution.resolved_assets:
         if item.magic == "BTX0":
             add(item)
-    for item in folder_sibling_assets(
-        asset,
-        all_assets,
-        allowed_magics=MODEL_ANIMATION_MAGICS,
-        limit=16,
-    ):
+    animation_siblings = named_animation_siblings(asset, all_assets, limit=16)
+    if not animation_siblings:
+        animation_siblings = folder_sibling_assets(
+            asset,
+            all_assets,
+            allowed_magics=MODEL_ANIMATION_MAGICS,
+            limit=16,
+        )
+    for item in animation_siblings:
         add(item)
     return siblings[:16]
 
@@ -203,7 +207,14 @@ def build_textured_model_bundle(
             material_to_texture=material_to_texture,
             texture_bind_order=bind_order,
             fallback_paths=list(fallback_paths),
-            prefer_material_bindings=bool(resolution.bindings),
+            # apicula's material/image table is authoritative when the NSBMD
+            # carries its own TEX0. Reapplying RAE's parsed cross-bindings here
+            # can swap same-file textures (notably Gen 5 ships and oceans).
+            # Carved models and external NSBTX resolutions still need RAE's
+            # exact material mapping because their source table may be partial.
+            prefer_material_bindings=bool(resolution.bindings) and (
+                asset.carved or resolution.status != "embedded_texture"
+            ),
         )
     )
 

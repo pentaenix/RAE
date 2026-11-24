@@ -77,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_audio.add_argument("rom")
     p_audio.add_argument("--out", "-o", default="exports/audio", help="Output folder")
     p_audio.add_argument("--query", "-q", default="", help="Optional filter before audio export; try SDAT, SWAR, SWAV, STRM, SSEQ, SSAR, or SBNK")
+    p_audio.add_argument("--sound", action="append", help="Export SDAT entries whose symbol contains this text (repeatable)")
     p_audio.add_argument("--limit", type=int, default=0, help="Optional export limit")
     p_audio.add_argument("--deep-scan", action="store_true", help="Slower fallback: carve known files inside unknown containers")
 

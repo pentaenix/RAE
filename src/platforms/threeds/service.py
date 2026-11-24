@@ -25,6 +25,7 @@ from .gf import (
     parse_gf_texture,
 )
 from .glb import FormVariantExport, write_model_glb
+from .pokemon_effects import attach_shaders
 from .motion import GfMotion, GFMOTION_MAGIC, is_gf_motion, parse_gf_motion
 from .rom import (
     ANIMATION_SLOTS,
@@ -105,7 +106,7 @@ def load_model(descriptor: dict) -> GfModel:
     entries = read_pack_entries(package)
     for entry in entries:
         if is_gf_model(entry):
-            return parse_gf_model(entry, _safe_stem(descriptor))
+            return attach_shaders(parse_gf_model(entry, _safe_stem(descriptor)),package)
     raise ValueError(
         f"no GFModel found in model package ({descriptor.get('garc')} slot {base + SLOT_MODEL})"
     )

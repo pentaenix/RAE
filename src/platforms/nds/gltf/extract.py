@@ -1043,14 +1043,19 @@ def _selected_world_positions(glb: GlbData) -> list[tuple[float, float, float]]:
     return positions
 
 
-def _recenter_selected_geometry(glb: GlbData, *, origin_y: float | None = None) -> None:
+def _recenter_selected_geometry(
+    glb: GlbData,
+    *,
+    origin_y: float | None = None,
+    origin_xz: tuple[float, float] | None = None,
+) -> None:
     positions = _selected_world_positions(glb)
     if not positions:
         return
     minimum = [min(value[axis] for value in positions) for axis in range(3)]
     maximum = [max(value[axis] for value in positions) for axis in range(3)]
-    center_x = (minimum[0] + maximum[0]) / 2.0
-    center_z = (minimum[2] + maximum[2]) / 2.0
+    center_x = float(origin_xz[0]) if origin_xz is not None else (minimum[0] + maximum[0]) / 2.0
+    center_z = float(origin_xz[1]) if origin_xz is not None else (minimum[2] + maximum[2]) / 2.0
     anchor_y = minimum[1] if origin_y is None else float(origin_y)
     translation = [-center_x, -anchor_y, -center_z]
     scenes = glb.json.setdefault("scenes", [{"nodes": []}])
@@ -1068,6 +1073,7 @@ def _recenter_selected_geometry(glb: GlbData, *, origin_y: float | None = None) 
         "max": maximum,
         "originTranslation": translation,
         **({"originY": anchor_y} if origin_y is not None else {}),
+        **({"originXZ": [center_x, center_z]} if origin_xz is not None else {}),
     }
 
 
@@ -1739,6 +1745,7 @@ def extract_material_primitives(
     preserve_spatial_components: bool = False,
     spatial_component_center_filter: bool = False,
     origin_y: float | None = None,
+    origin_xz: tuple[float, float] | None = None,
     vertical_faces_only_materials: set[str] | None = None,
     black_wall_cap_materials: set[str] | None = None,
     cutaway_edge: str | None = None,
@@ -1970,7 +1977,7 @@ def extract_material_primitives(
 
     result = GlbData(json=gltf, bin_chunk=bytes(bin_chunk))
     if recenter:
-        _recenter_selected_geometry(result, origin_y=origin_y)
+        _recenter_selected_geometry(result, origin_y=origin_y, origin_xz=origin_xz)
     # The material table was compacted above. Rebuild portable UV-animation
     # targets so their JSON pointers reference the isolated material indices.
     from ..material_animation import sync_material_motion_property_animations

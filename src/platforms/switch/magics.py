@@ -5,6 +5,7 @@ ASSET_MAGICS: dict[str, str] = {
     "SWRM": "switch",  # ROM summary descriptor
     "SWLK": "switch",  # locked ROM (keys required)
     "TRMD": "switch",  # Trinity model (.trmdl)
+    "SNAP": "switch",  # New Pokémon Snap course preview
     "BNTX": "switch",  # texture container
     "TRAN": "switch",  # animation (.tranm / .gfbanm)
     "TRPF": "switch",  # Trinity pack (.trpfs / .trpfd)

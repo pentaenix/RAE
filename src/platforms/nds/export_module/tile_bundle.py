@@ -724,6 +724,7 @@ def write_tile_archive(
     footprint: tuple[int, int] | None = None,
     default_tags: list[str] | None = None,
     default_properties: dict[str, Any] | None = None,
+    default_collision: dict[str, Any] | None = None,
 ) -> Path:
     """Write an already-prepared GLB and frame files as a versioned bundle."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -773,7 +774,7 @@ def write_tile_archive(
                 **(default_properties or {}),
             },
             "renderMode": _suggest_render_mode(model_glb),
-            "collision": {"mode": "none", "autoApply": False},
+            "collision": dict(default_collision or {"mode": "none", "autoApply": False}),
         },
     }
     manifest_path = staging / "manifest.json"

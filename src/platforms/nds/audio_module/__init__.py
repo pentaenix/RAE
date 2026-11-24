@@ -17,6 +17,15 @@ class NdsAudioModule:
 
     def preview(self, ctx: PreviewContext, asset: Asset) -> bool:
         window = ctx.window
+        if asset.magic == "SDAT" and ctx.manual:
+            from .browser import SoundArchiveDialog
+
+            dialog = SoundArchiveDialog(window, asset.data)
+            dialog.exec()
+            return True
+        if asset.magic == "SDAT":
+            window.preview.show_message("Double-click to browse, play and export sounds.\n\n" + asset.virtual_path)
+            return True
         window.preview.show_message(
             f"Audio asset selected. Use Export Selected… to write raw files and WAV previews where possible.\n\n{asset.virtual_path}"
         )

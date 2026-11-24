@@ -25,6 +25,11 @@ class SwitchDetailsModule:
                 f"RomFS files: {desc.get('romfs_files')}\n"
                 f"Keys: {desc.get('keys_source')}"
             )
+        if kind == "snap_course_preview":
+            return (
+                f"{asset.mapping_label}\nRomFS: {desc.get('romfs_path')}\n"
+                "Free camera with source terrain textures and sky."
+            )
         if kind == "romfs_file":
             return (
                 f"RomFS: {desc.get('romfs_path')}\n"

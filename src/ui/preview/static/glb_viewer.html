@@ -56,6 +56,18 @@
     #pan-knob:hover { background: rgba(34, 46, 61, 0.9); }
     #pan-knob.dragging { cursor: grabbing; background: rgba(48, 72, 96, 0.94); }
     #pan-knob::before { content: "✥"; }
+    #free-camera-help {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 4;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: rgba(17, 23, 31, 0.82);
+      color: #f0f8ff;
+      font: 12px/1.5 sans-serif;
+      pointer-events: none;
+    }
   </style>
   <script type="importmap">
   {
@@ -68,6 +80,7 @@
 <body class="bg-checkered">
   <div id="error"></div>
   <button id="pan-knob" type="button" aria-label="Drag to move the 3D view" title="Drag to move the 3D view"></button>
+  <div id="free-camera-help" hidden>Drag to look · WASD to swim · Q down / E up · Shift faster · R reset</div>
   <script>
     window.addEventListener('unhandledrejection', (e) => {
       const el = document.getElementById('error');
@@ -88,6 +101,7 @@
     import * as THREE from 'three';
     import { GLTFLoader } from './vendor/three/addons/loaders/GLTFLoader.js';
     import { RoomEnvironment } from './vendor/three/addons/environments/RoomEnvironment.js';
+    import { FreeCamera } from './free-camera.js';
 
     const policyUrl = new URLSearchParams(location.search).get('policy');
     if (!policyUrl) {
@@ -118,6 +132,7 @@
     let renderer;
     let scene;
     let camera;
+    let freeCamera;
     let pivot;
     let disposeLighting = () => {};
     let cam = { yaw: 35, pitch: 28, zoomFactor: 1, panX: 0, panY: 0 };
@@ -227,7 +242,7 @@
         Black: 'bg-black',
       }[currentBg] || 'bg-checkered';
       if (scene) {
-        const color = BG[currentBg];
+        const color = freeCamera?.background ?? BG[currentBg];
         scene.background = color === null ? null : new THREE.Color(color);
       }
     }
@@ -292,6 +307,7 @@
       model.position.sub(center);
       const size = box.getSize(new THREE.Vector3());
       orbitExtent = Math.max(size.x, size.y, size.z, 0.01);
+      return center;
     }
 
     function fitCamera(viewW, viewH) {
@@ -402,6 +418,12 @@
 
     function clearSceneGraph() {
       if (!pivot) return;
+      if (freeCamera.active) {
+        freeCamera.deactivate();
+        document.getElementById('pan-knob').hidden = false;
+        scene.fog = null;
+        applyBackground(currentBg);
+      }
       stopSkeletalAnimation();
       if (animModel) stopMapMaterialMotionFn(animModel);
       mapMotionPlayingName = '';
@@ -596,6 +618,7 @@
       scene = new THREE.Scene();
       applyBackground(currentBg);
       camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 10000);
+      freeCamera = new FreeCamera(renderer.domElement, document.getElementById('free-camera-help'));
       pivot = new THREE.Group();
       pivot.position.set(0, 0, 0);
       scene.add(pivot);
@@ -605,14 +628,14 @@
       let lastX = 0;
       let lastY = 0;
       renderer.domElement.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || freeCamera.active) return;
         dragging = true;
         lastX = e.clientX;
         lastY = e.clientY;
       });
       window.addEventListener('mouseup', () => { dragging = false; });
       window.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
+        if (!dragging || freeCamera.active) return;
         const dx = e.clientX - lastX;
         const dy = e.clientY - lastY;
         lastX = e.clientX;
@@ -658,8 +681,10 @@
       panKnob?.addEventListener('pointerup', stopPanning);
       panKnob?.addEventListener('pointercancel', stopPanning);
       renderer.domElement.addEventListener('wheel', (e) => {
-        const factor = e.deltaY > 0 ? 1.1 : 0.9;
-        cam.zoomFactor = Math.max(0.2, Math.min(8, (cam.zoomFactor || 1) * factor));
+        if (!freeCamera.active) {
+          const factor = e.deltaY > 0 ? 1.1 : 0.9;
+          cam.zoomFactor = Math.max(0.2, Math.min(8, (cam.zoomFactor || 1) * factor));
+        }
         e.preventDefault();
       }, { passive: false });
 
@@ -677,7 +702,7 @@
       const loop = () => {
         animId = requestAnimationFrame(loop);
         if (!renderer || !scene || !camera) return;
-        if (!snapshotMode && pivot.children.length) {
+        if (!snapshotMode && !freeCamera.active && pivot.children.length) {
           fitCamera(window.innerWidth, window.innerHeight);
         }
         const now = performance.now();
@@ -685,7 +710,8 @@
         advanceSkeletalAnimation(now);
         if (animModel) advanceMapMaterialMotion(animModel, now);
         if (!snapshotMode) {
-          renderer.render(scene, camera);
+          if (freeCamera.active) freeCamera.update(now, window.innerWidth, window.innerHeight);
+          renderer.render(scene, freeCamera.active ? freeCamera.camera : camera);
         }
       };
       loop();
@@ -846,6 +872,7 @@
       currentUrl = url;
 
       const loader = new GLTFLoader();
+      policy.registerGlbLoaderPlugins?.(loader);
       let gltf;
       try {
         gltf = await loader.loadAsync(url);
@@ -862,6 +889,10 @@
       }
 
       const model = gltf.scene;
+      const settings = gltf.parser.json.extras?.rae?.freeCamera;
+      const useFreeCamera = [settings?.start, settings?.target].every(
+        (point) => Array.isArray(point) && point.length === 3 && point.every(Number.isFinite),
+      );
       model.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
@@ -873,7 +904,7 @@
           captureMaterialPolicy(mat, src);
         }
       });
-      applyUnlitPreviewMaterials(model);
+      if (!useFreeCamera) applyUnlitPreviewMaterials(model);
       applyRaeMaterialPolicy(model);
       model.traverse((obj) => {
         if (obj.isSkinnedMesh) {
@@ -884,13 +915,21 @@
         if (obj.isMesh) obj.frustumCulled = false;
       });
       pivot.add(model);
-      centerModelAtOrigin(model);
+      const center = centerModelAtOrigin(model);
       fitCamera(window.innerWidth, window.innerHeight);
       await rebuildMaterialIndex(model, gltf);
       if (loadToken !== activeLoadToken) {
         pivot.remove(model);
         disposeModel(model);
         return;
+      }
+      if (useFreeCamera) {
+        freeCamera.activate(settings, center, orbitExtent);
+        document.getElementById('pan-knob').hidden = true;
+        applyBackground(currentBg);
+        if (settings.background && settings.fog?.length === 2) {
+          scene.fog = new THREE.Fog(settings.background, ...settings.fog);
+        }
       }
       buildMeshVisibilityTables(gltf);
       applyDefaultMeshVisibility();
@@ -924,11 +963,16 @@
         });
       },
       clearScene() {
+        activeLoadToken += 1;
         pauseFlipbook();
         clearSceneGraph();
         clearError();
       },
       resetView() {
+        if (freeCamera?.active) {
+          freeCamera.reset();
+          return;
+        }
         cam.yaw = 35;
         cam.pitch = 28;
         cam.zoomFactor = 1;
@@ -974,6 +1018,7 @@
       },
       getCameraState() {
         return JSON.stringify({
+          ...(freeCamera?.active ? { mode: 'free', position: freeCamera.camera.position.toArray() } : {}),
           yaw: Number(cam.yaw ?? 35),
           pitch: Number(cam.pitch ?? 28),
           zoomFactor: Number(cam.zoomFactor ?? 1),

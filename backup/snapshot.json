@@ -1,0 +1,11 @@
+{
+  "repository": "rae",
+  "date": "2026-11-24",
+  "originalHead": "a89bfdfcc5b69b94a6a651f729276a7ae061cee7",
+  "originalBranch": "main",
+  "snapshotBranch": "backup/resort-2026-11-24",
+  "includedPaths": 851,
+  "excluded": "Ignored files, build outputs, generated exports/caches, and local runtime saves are not part of this source snapshot.",
+  "conflictedWorktree": false,
+  "largeAssetsInRelease": false
+}

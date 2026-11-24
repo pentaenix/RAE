@@ -643,6 +643,9 @@ export function applyRaeMaterialPolicy(root) {
         captureMaterialPolicy(mat, mat.userData.gltfMaterial || null);
       }
       scheduleMaterialPolicyWhenMapReady(mat);
+      if (mat.userData.gltfMaterial?.extras?.rae?.pokemonEffectPass === 'intermediate') {
+        mat.visible = false;
+      }
       const renderClass = mat.userData.raePolicy?.renderClass || renderClassForMaterial(mat);
       const role = materialRoleForMaterial(mat, mat.userData.gltfMaterial || null);
       const blend = resolvePreviewBlendMode(mat);

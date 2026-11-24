@@ -199,6 +199,7 @@ class GfMaterial:
     pica_registers: dict[int, int] = field(default_factory=dict)
     tev_stages: tuple[dict[str, int | bool], ...] = ()
     tev_buffer_color: tuple[int, int, int, int] = (0, 0, 0, 0)
+    portable_effect_recipe: str = ""
 
 
 @dataclass(slots=True)

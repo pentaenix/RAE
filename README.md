@@ -74,6 +74,23 @@ workflows:
 
 Run `./rae --help` or `./rae <command> --help` for the current options.
 
+### Nintendo DS audio
+
+Double-click an **SDAT** sound archive to search its ROM symbols, play a sound
+and export WAVs. Black 2 examples include `FOOT_SAND` for sand footsteps and
+`YURAN_NAMI` for wave samples. Wave archives with multiple samples let you open
+the archive and audition its individual clips.
+
+SWAV samples and STRM streams decode directly. For SSEQ and SSAR playback and
+WAV export, install the [DualRip CLI](https://github.com/TetraSsky/DualRip/releases)
+on your PATH as `dualrip`, or set `RAE_DUALRIP` to the executable path.
+RAE passes the original SDAT so the sequences can use their sound banks.
+
+```bash
+./rae audio roms/game.nds --sound FOOT_SAND --sound YURAN_NAMI --out exports/beach
+```
+
+
 ## Optional model conversion tools
 
 Nintendo DS model conversion uses the vendored `apicula` source under
